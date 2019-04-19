@@ -1,0 +1,50 @@
+--物流时间节点
+SELECT o.oid,code 订单识别代码,owner_name 货主店铺名,paidon 客户支付时间点,owner_ship_time 货主发货时间点,订单拆货时间点,
+订单确认收货时间点,打印顺丰运单时间点,订单对庄发货时间点,物流信息显示“正在派送途中”的时间
+
+from core_order o
+
+LEFT JOIN (
+  SELECT order_id,create_time 订单对庄发货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄发货')
+) F 
+ON o.oid = F.order_id
+
+LEFT JOIN (
+  SELECT DISTINCT order_id, create_time 订单确认收货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄收货')
+) S 
+ON o.oid = S.order_id
+
+LEFT JOIN (
+  SELECT order_id,create_time 订单拆货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄拆货')
+) x 
+ON o.oid = x.order_id
+
+
+LEFT JOIN (
+  SELECT order_id, min(create_time) 打印顺丰运单时间点
+  FROM order_log
+  WHERE log_type IN ('生成运单')
+  GROUP BY order_id
+) z 
+ON o.oid = z.order_id
+
+
+LEFT JOIN (
+  SELECT order_oid,MIN (express_time) 物流信息显示“正在派送途中”的时间
+  FROM order_express_info
+  WHERE express_info LIKE '%正在派送途中%' AND info_type = 40
+  GROUP BY order_oid
+) c 
+ON o.oid = c.order_oid
+
+where 
+owner_ship_time >= '2019-01-01 00:00:00'
+--o.paidon >= '2019-01-01 00:00:00'
+--o.state = '已签收'
+--and code = 'AZ-1812261770813885'
