@@ -1,0 +1,246 @@
+--鉴定中心发货时效每日数据
+SELECT d1 日期,货主发货时长,宝贝运输时长（到对庄）,鉴定中心停留时长,验货时长,打单时长,打包时长,宝贝运输时长（到客户）
+FROM
+(
+SELECT d1,ROUND(sum(货主发货时长1)/count(货主发货时长1),2) AS 货主发货时长 
+from
+(
+SELECT d1,(Case WHEN 货主发货时长 >10000 or 货主发货时长 <0 Then NULL ELSE 货主发货时长 end) 货主发货时长1
+FROM
+(
+SELECT 
+date(货主发货时间点) d1,
+订单识别代码,
+round(sum((EXTRACT (epoch FROM( 货主发货时间点 - 客户支付时间点)))/3600)::numeric,2) AS 货主发货时长
+FROM
+(
+SELECT o.oid,code 订单识别代码,owner_name 货主店铺名,paidon 客户支付时间点,owner_ship_time 货主发货时间点
+from core_order o
+where owner_ship_time BETWEEN date_trunc('day',	now() - INTERVAL '1 days') and date_trunc('day',now() - INTERVAL '0 days')
+--o.state = '已签收'
+--code = 'ZB-190317172854517'
+) AS 物流信息
+
+GROUP BY d1,订单识别代码
+order by d1
+) AS aa
+) as ba
+GROUP BY d1
+)ca 
+
+LEFT JOIN
+(
+SELECT d2,ROUND(sum(宝贝运输时长（到对庄）1)/count(宝贝运输时长（到对庄）1),2) AS 宝贝运输时长（到对庄） 
+from
+(
+SELECT d2,(Case WHEN 宝贝运输时长（到对庄） >10000 or 宝贝运输时长（到对庄） <0 Then NULL ELSE 宝贝运输时长（到对庄） end) 宝贝运输时长（到对庄）1
+FROM
+(
+SELECT 
+date(订单拆货时间点) d2,
+订单识别代码,
+round(sum((EXTRACT (epoch FROM(订单拆货时间点 - 货主发货时间点)))/3600)::numeric,2) AS 宝贝运输时长（到对庄）
+FROM
+(
+SELECT o.oid,code 订单识别代码,owner_name 货主店铺名,paidon 客户支付时间点,owner_ship_time 货主发货时间点,订单拆货时间点
+from core_order o
+LEFT JOIN (
+  SELECT order_id,create_time 订单拆货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄拆货')
+) x 
+ON o.oid = x.order_id
+
+where 订单拆货时间点  BETWEEN date_trunc('day',	now() - INTERVAL '1 days') and date_trunc('day',now() - INTERVAL '0 days')
+--o.state = '已签收'
+--code = 'ZB-190317172854517'
+) AS 物流信息
+
+GROUP BY d2,订单识别代码
+order by d2
+) AS ab
+) as bb
+GROUP BY d2
+)cb
+on ca.d1=cb.d2 
+
+lEFT JOIN
+(
+SELECT d3,ROUND(sum(鉴定中心停留时长1)/count(鉴定中心停留时长1),2) AS 鉴定中心停留时长,ROUND(sum(打包时长1)/count(打包时长1),2) AS 打包时长 
+from
+(
+SELECT d3,
+       (Case WHEN 鉴定中心停留时长 >10000 or 鉴定中心停留时长 <0 Then NULL ELSE 鉴定中心停留时长 end) 鉴定中心停留时长1,
+       (Case WHEN 打包时长 >10000 or 打包时长 <0 Then NULL ELSE 打包时长 end) 打包时长1
+FROM
+(
+SELECT 
+date(订单对庄发货时间点) d3,
+订单识别代码,
+round(sum((EXTRACT (epoch FROM( 订单对庄发货时间点 - 订单拆货时间点)))/3600)::numeric,2) AS 鉴定中心停留时长,
+round(sum((EXTRACT (epoch FROM( 订单对庄发货时间点 - 打印顺丰运单时间点)))/3600)::numeric,2) AS 打包时长
+FROM
+(
+SELECT o.oid,code 订单识别代码,owner_name 货主店铺名,订单拆货时间点,打印顺丰运单时间点,订单对庄发货时间点
+from core_order o
+
+LEFT JOIN (
+  SELECT order_id,create_time 订单拆货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄拆货')
+) x 
+ON o.oid = x.order_id
+LEFT JOIN (
+  SELECT order_id,create_time 订单对庄发货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄发货')
+) F 
+ON o.oid = F.order_id
+LEFT JOIN (
+  SELECT order_id, min(create_time) 打印顺丰运单时间点
+  FROM order_log
+  WHERE log_type IN ('生成运单')
+  GROUP BY order_id
+) z 
+ON o.oid = z.order_id
+
+where 订单对庄发货时间点  BETWEEN date_trunc('day',	now() - INTERVAL '1 days') and date_trunc('day',now() - INTERVAL '0 days')
+--o.state = '已签收'
+--code = 'ZB-190317172854517'
+) AS 物流信息
+
+GROUP BY d3,订单识别代码
+order by d3
+) AS ac
+) as bc
+GROUP BY d3
+)cc
+on ca.d1=cc.d3  
+
+LEFT JOIN
+(
+SELECT d4,ROUND(sum(验货时长1)/count(验货时长1),2) AS 验货时长 
+from
+(
+SELECT d4,(Case WHEN 验货时长 >10000 or 验货时长 <0 Then NULL ELSE 验货时长 end) 验货时长1
+FROM
+(
+SELECT 
+date(订单确认收货时间点) d4,
+订单识别代码,
+round(sum((EXTRACT (epoch FROM( 订单确认收货时间点 - 订单拆货时间点)))/3600)::numeric,2) AS 验货时长
+FROM
+(
+SELECT o.oid,code 订单识别代码,owner_name 货主店铺名,订单拆货时间点,订单确认收货时间点
+from core_order o
+LEFT JOIN (
+  SELECT DISTINCT order_id, create_time 订单确认收货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄收货')
+) S 
+ON o.oid = S.order_id
+LEFT JOIN (
+  SELECT order_id,create_time 订单拆货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄拆货')
+) x 
+ON o.oid = x.order_id
+
+where 订单确认收货时间点  BETWEEN date_trunc('day',	now() - INTERVAL '1 days') and date_trunc('day',now() - INTERVAL '0 days')
+--o.state = '已签收'
+--code = 'ZB-190317172854517'
+) AS 物流信息
+
+GROUP BY d4,订单识别代码
+order by d4
+) AS ad
+) as bd
+GROUP BY d4
+)cd
+on ca.d1=cd.d4 
+
+LEFT JOIN
+(
+SELECT d5,ROUND(sum(打单时长1)/count(打单时长1),2) AS 打单时长 
+from
+(
+SELECT d5,(Case WHEN 打单时长 >10000 or 打单时长 <0 Then NULL ELSE 打单时长 end) 打单时长1
+FROM
+(
+SELECT 
+date(打印顺丰运单时间点) d5,
+订单识别代码,
+round(sum((EXTRACT (epoch FROM( 打印顺丰运单时间点 - 订单确认收货时间点)))/3600)::numeric,2) AS 打单时长
+FROM
+(
+SELECT o.oid,code 订单识别代码,owner_name 货主店铺名,打印顺丰运单时间点,订单确认收货时间点
+from core_order o
+LEFT JOIN (
+  SELECT DISTINCT order_id, create_time 订单确认收货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄收货')
+) S 
+ON o.oid = S.order_id
+LEFT JOIN (
+  SELECT order_id, min(create_time) 打印顺丰运单时间点
+  FROM order_log
+  WHERE log_type IN ('生成运单')
+  GROUP BY order_id
+) z 
+ON o.oid = z.order_id
+
+where 打印顺丰运单时间点  BETWEEN date_trunc('day',	now() - INTERVAL '1 days') and date_trunc('day',now() - INTERVAL '0 days')
+--o.state = '已签收'
+--code = 'ZB-190317172854517'
+) AS 物流信息
+
+GROUP BY d5,订单识别代码
+order by d5
+) AS ae
+) as be
+GROUP BY d5
+)ce
+on ca.d1=ce.d5 
+
+LEFT JOIN
+(
+SELECT d6,ROUND(sum(宝贝运输时长（到客户）1)/count(宝贝运输时长（到客户）1),2) AS 宝贝运输时长（到客户） 
+from
+(
+SELECT d6,(Case WHEN 宝贝运输时长（到客户） >10000 or 宝贝运输时长（到客户） <0 Then NULL ELSE 宝贝运输时长（到客户） end) 宝贝运输时长（到客户）1
+FROM
+(
+SELECT 
+date(物流信息显示“正在派送途中”的时间) d6,
+订单识别代码,
+round(sum((EXTRACT (epoch FROM( 物流信息显示“正在派送途中”的时间 - 订单对庄发货时间点)))/3600)::numeric,2) AS 宝贝运输时长（到客户）
+FROM
+(
+SELECT o.oid,code 订单识别代码,owner_name 货主店铺名,订单对庄发货时间点,物流信息显示“正在派送途中”的时间
+from core_order o
+LEFT JOIN (
+  SELECT order_id,create_time 订单对庄发货时间点
+  FROM order_log
+  WHERE log_type IN ('对庄发货')
+) F 
+ON o.oid = F.order_id
+LEFT JOIN (
+  SELECT order_oid,MIN (express_time) 物流信息显示“正在派送途中”的时间
+  FROM order_express_info
+  WHERE express_info LIKE '%正在派送途中%' AND info_type = 40
+  GROUP BY order_oid
+) c 
+ON o.oid = c.order_oid
+
+where 物流信息显示“正在派送途中”的时间  BETWEEN date_trunc('day',	now() - INTERVAL '1 days') and date_trunc('day',now() - INTERVAL '0 days')
+--o.state = '已签收'
+--code = 'ZB-190317172854517'
+) AS 物流信息
+
+GROUP BY d6,订单识别代码
+order by d6
+) AS af
+) as bf
+GROUP BY d6
+)cf
+on ca.d1=cf.d6 
