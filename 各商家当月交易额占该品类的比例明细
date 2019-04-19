@@ -1,4 +1,4 @@
---每个商家按品类分组的数据明细
+--各商家当月交易额占该品类的比例明细
 select gkzb.d 月份,gkzb.code 直播间ID,观看人数,付费人数,订单数,总交易额,签收人数,签收订单数,签收交易额,退货人数,退货订单数,退货交易额
 from 
 (SELECT extract(MONTH from create_time) as d, code,count(DISTINCT a.user_id) 观看人数
