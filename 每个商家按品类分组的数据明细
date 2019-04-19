@@ -1,0 +1,60 @@
+--每个商家按品类分组的数据明细
+select gkzb.d 月份,gkzb.code 直播间ID,观看人数,付费人数,订单数,总交易额,签收人数,签收订单数,签收交易额,退货人数,退货订单数,退货交易额
+from 
+(SELECT extract(MONTH from create_time) as d, code,count(DISTINCT a.user_id) 观看人数
+from 
+(select room_code,user_id,start_time,end_time,create_time
+FROM live_record_user WHERE create_time BETWEEN '2019-01-01 00:00:00' and '2019-05-01 00:00:00' AND type=0  )a
+inner JOIN 
+(select user_id,code
+from live_room)b
+on a.room_code =b.code
+GROUP BY d,code )gkzb
+LEFT JOIN
+(select extract(MONTH from paidon) as d, code,count(DISTINCT a.buyer_id) 付费人数,count(DISTINCT oid) 订单数,sum(paymentamount) 总交易额
+--select *
+from 
+(select buyer_id,oid,paymentamount,paidon ,owner_id,live_id 
+from core_order where paidon BETWEEN '2019-01-01 00:00:00' and '2019-05-01 00:00:00' 
+and paymentamount >500 and "type" =4 )a
+inner JOIN 
+(select user_id,code
+from live_room)b
+on a.owner_id =b.user_id 
+GROUP BY d,code )ztff
+on gkzb.d=ztff.d
+and gkzb.code =ztff.code
+
+LEFT JOIN 
+
+(--签收情况
+select extract(MONTH from paidon) as d, code,count(DISTINCT a.buyer_id) 签收人数,count(DISTINCT oid) 签收订单数,sum(paymentamount) 签收交易额
+--select *
+from 
+(select buyer_id,oid,paymentamount,paidon,owner_id,live_id 
+from core_order where paidon BETWEEN '2019-01-01 00:00:00' and '2019-05-01 00:00:00' 
+and paymentamount >500 and "type" =4 and state in ('已签收') )a
+
+INNER JOIN 
+(select user_id,code
+from live_room )b
+on a.owner_id =b.user_id 
+GROUP BY d,code )dd
+on gkzb.d =dd.d
+and gkzb.code =dd.code
+
+LEFT JOIN 
+(--退货
+select extract(MONTH from paidon) as d, code,count(DISTINCT a.buyer_id) 退货人数,count(DISTINCT oid) 退货订单数,sum(paymentamount) 退货交易额
+--select *
+from 
+(select buyer_id,oid,paymentamount,paidon ,owner_id,live_id 
+from core_order where paidon BETWEEN '2019-01-01 00:00:00' and '2019-05-01 00:00:00'
+and paymentamount >500 and "type" =4 and state in ('退款成功','退款中'))a
+INNER JOIN 
+(select user_id,code
+from live_room  )b
+on a.owner_id =b.user_id 
+GROUP BY d,code )tk
+on gkzb.d =tk.d
+and gkzb.code =tk.code
